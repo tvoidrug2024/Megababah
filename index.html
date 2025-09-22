@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Стрелялка ХУЙ</title>
+    <title>Дуэль Стрелялка</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -338,15 +338,15 @@
             miniMapCtx = miniMapCanvas.getContext('2d');
 
             // Initialize PeerJS
-            function tryCreatePeer(attempt = 1) {
+            function tryCreatePeer(attempt = 1, server = '0.peerjs.com') {
                 if (attempt > 3) {
-                    alert('Не удалось подключиться к серверу. Попробуйте позже.');
+                    alert('Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.');
                     document.getElementById('myId').textContent = 'Ошибка';
                     return;
                 }
                 let id = generateNumericId();
                 peer = new Peer(id, {
-                    host: '0.peerjs.com',
+                    host: server,
                     port: 443,
                     path: '/',
                     secure: true,
@@ -354,19 +354,30 @@
                     debug: 2
                 });
 
+                let timeout = setTimeout(() => {
+                    if (document.getElementById('myId').textContent === 'Ожидание...') {
+                        peer.destroy();
+                        tryCreatePeer(attempt + 1, server === '0.peerjs.com' ? 'peerjs.com' : '0.peerjs.com');
+                    }
+                }, 5000);
+
                 peer.on('open', function() {
+                    clearTimeout(timeout);
                     document.getElementById('myId').textContent = id;
                     document.getElementById('waitingStatus').textContent = 'Готов к подключению';
                 });
 
                 peer.on('error', function(err) {
                     console.error('PeerJS error:', err);
+                    clearTimeout(timeout);
                     if (err.type === 'unavailable-id') {
-                        tryCreatePeer(attempt + 1);
+                        tryCreatePeer(attempt + 1, server);
                     } else if (err.type === 'disconnected' || err.type === 'server-disconnected') {
-                        // Attempt to reconnect
                         peer.reconnect();
-                        setTimeout(() => tryCreatePeer(attempt + 1), 2000);
+                        setTimeout(() => tryCreatePeer(attempt + 1, server), 2000);
+                    } else if (err.type === 'network') {
+                        alert('Ошибка сети. Проверьте подключение к интернету.');
+                        cancelConnection();
                     } else {
                         document.getElementById('myId').textContent = 'Ошибка';
                         alert('Ошибка подключения: ' + err.message);
@@ -444,7 +455,14 @@
             conn = peer.connect(friendId, { reliable: true });
             setupConnection();
             showWaiting('Подключение к другу...');
-            isHost = false;
+
+            // Connection timeout
+            setTimeout(() => {
+                if (gameState === 'waiting' && (!conn || !conn.open)) {
+                    alert('Время ожидания подключения истекло. Попробуйте снова.');
+                    cancelConnection();
+                }
+            }, 10000);
         }
 
         function setupConnection() {
@@ -468,7 +486,11 @@
             conn.on('error', function(err) {
                 console.error('Connection error:', err);
                 if (gameState === 'waiting') {
-                    alert('Ошибка подключения к другу!');
+                    if (err.type === 'peer-unavailable') {
+                        alert('Игрок с таким ID недоступен!');
+                    } else {
+                        alert('Ошибка подключения к другу: ' + err.message);
+                    }
                     cancelConnection();
                 }
             });
@@ -486,10 +508,18 @@
             if (conn) {
                 conn.send({ type: 'decline' });
                 conn.close();
+                conn = null;
+            }
+            if (peer) {
+                peer.destroy();
+                peer = null;
             }
             document.getElementById('waitingScreen').style.display = 'none';
             document.getElementById('onlineMenu').style.display = 'flex';
             document.getElementById('gameCanvas').style.display = 'none';
+            document.getElementById('myId').textContent = 'Ожидание...';
+            // Restart peer connection
+            tryCreatePeer();
             gameState = 'menu';
         }
 
@@ -767,7 +797,13 @@
             if (conn && conn.open) {
                 conn.send({ type: 'gameOver', message: message === 'Вы победили серию!' ? 'Вы проиграли серию!' : 'Вы победили серию!' });
                 conn.close();
+                conn = null;
             }
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            tryCreatePeer();
             playerWins = 0;
             enemyWins = 0;
         }
