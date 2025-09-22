@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Стрелялка</title>
+    <title>Дуэль Стрелялкаа</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -288,7 +288,7 @@
     </div>
 
     <script>
-        // Game Variables
+        // Переменные игры
         let canvas, ctx, miniMapCanvas, miniMapCtx;
         let gameState = 'menu';
         let nickname = '';
@@ -304,6 +304,7 @@
         let cameraY = 0;
         let keys = {};
         let mouseX = 0, mouseY = 0;
+        let pendingMessages = [];
         let gameData = {
             player: { x: 100, y: 400, health: 100, angle: 0 },
             enemy: { x: 1900, y: 400, health: 100, angle: 0 },
@@ -323,12 +324,12 @@
             { x: 800, y: 300, w: 300, h: 50 }
         ];
 
-        // Generate 6-digit numeric ID
+        // Генерация 6-значного ID
         function generateNumericId() {
             return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
-        // Initialize
+        // Инициализация
         window.onload = function() {
             canvas = document.getElementById('gameCanvas');
             canvas.width = window.innerWidth;
@@ -337,44 +338,49 @@
             miniMapCanvas = document.getElementById('miniMap');
             miniMapCtx = miniMapCanvas.getContext('2d');
 
-            // Initialize PeerJS
-            function tryCreatePeer(attempt = 1, server = '0.peerjs.com') {
+            // Инициализация PeerJS
+            function tryCreatePeer(attempt = 1) {
                 if (attempt > 3) {
-                    alert('Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.');
+                    alert('Не удалось подключиться к сигнальному серверу. Проверьте интернет и попробуйте снова.');
                     document.getElementById('myId').textContent = 'Ошибка';
                     return;
                 }
                 let id = generateNumericId();
+                console.log(`Попытка подключения ${attempt}, ID: ${id}`);
                 peer = new Peer(id, {
-                    host: server,
+                    host: '0.peerjs.com',
                     port: 443,
                     path: '/',
                     secure: true,
-                    pingInterval: 5000,
+                    pingInterval: 10000,
                     debug: 2
                 });
 
                 let timeout = setTimeout(() => {
                     if (document.getElementById('myId').textContent === 'Ожидание...') {
+                        console.log('Тайм-аут инициализации PeerJS');
                         peer.destroy();
-                        tryCreatePeer(attempt + 1, server === '0.peerjs.com' ? 'peerjs.com' : '0.peerjs.com');
+                        tryCreatePeer(attempt + 1);
                     }
-                }, 5000);
+                }, 7000);
 
                 peer.on('open', function() {
                     clearTimeout(timeout);
                     document.getElementById('myId').textContent = id;
                     document.getElementById('waitingStatus').textContent = 'Готов к подключению';
+                    console.log(`PeerJS открыт, ID: ${id}`);
                 });
 
                 peer.on('error', function(err) {
-                    console.error('PeerJS error:', err);
+                    console.error('Ошибка PeerJS:', err);
                     clearTimeout(timeout);
                     if (err.type === 'unavailable-id') {
-                        tryCreatePeer(attempt + 1, server);
+                        console.log('ID занят, пробуем другой');
+                        tryCreatePeer(attempt + 1);
                     } else if (err.type === 'disconnected' || err.type === 'server-disconnected') {
+                        console.log('Попытка переподключения...');
                         peer.reconnect();
-                        setTimeout(() => tryCreatePeer(attempt + 1, server), 2000);
+                        setTimeout(() => tryCreatePeer(attempt + 1), 2000);
                     } else if (err.type === 'network') {
                         alert('Ошибка сети. Проверьте подключение к интернету.');
                         cancelConnection();
@@ -390,6 +396,7 @@
 
             peer.on('connection', function(connection) {
                 if (conn) {
+                    console.log('Отклоняем дублирующее соединение');
                     connection.close();
                     return;
                 }
@@ -399,7 +406,7 @@
                 showWaiting('Ожидание приглашения...');
             });
 
-            // Event Listeners
+            // События
             window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
             window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
             canvas.addEventListener('mousemove', (e) => {
@@ -419,7 +426,7 @@
                 return Math.max(min, Math.min(val, max));
             }
 
-            // Game Loop
+            // Игровой цикл
             setInterval(gameLoop, 1000 / 60);
         };
 
@@ -451,12 +458,16 @@
             if (!friendId || friendId.length !== 6 || !/^\d+$/.test(friendId)) {
                 return alert('Введите корректный 6-значный ID!');
             }
-            if (conn) conn.close();
+            if (conn) {
+                conn.close();
+                conn = null;
+            }
+            console.log(`Подключение к ID: ${friendId}`);
             conn = peer.connect(friendId, { reliable: true });
             setupConnection();
             showWaiting('Подключение к другу...');
 
-            // Connection timeout
+            // Тайм-аут подключения
             setTimeout(() => {
                 if (gameState === 'waiting' && (!conn || !conn.open)) {
                     alert('Время ожидания подключения истекло. Попробуйте снова.');
@@ -466,25 +477,43 @@
         }
 
         function setupConnection() {
+            let isOpen = false;
             conn.on('open', function() {
+                isOpen = true;
+                console.log('Соединение открыто');
                 if (!isHost) {
-                    conn.send({ type: 'invite', nick: nickname });
-                    showWaiting('Ожидание ответа друга...');
+                    sendData({ type: 'invite', nick: nickname });
+                }
+                // Отправляем отложенные сообщения
+                while (pendingMessages.length > 0 && isOpen) {
+                    conn.send(pendingMessages.shift());
                 }
             });
 
+            function sendData(data) {
+                if (isOpen) {
+                    conn.send(data);
+                    console.log('Отправлено:', data);
+                } else {
+                    pendingMessages.push(data);
+                    console.log('Сообщение отложено:', data);
+                }
+            }
+
             conn.on('data', function(data) {
+                console.log('Получено:', data);
                 handleData(data);
             });
 
             conn.on('close', function() {
+                console.log('Соединение закрыто');
                 if (gameState === 'playing' || gameState === 'waiting') {
                     gameOver('Соединение потеряно!');
                 }
             });
 
             conn.on('error', function(err) {
-                console.error('Connection error:', err);
+                console.error('Ошибка соединения:', err);
                 if (gameState === 'waiting') {
                     if (err.type === 'peer-unavailable') {
                         alert('Игрок с таким ID недоступен!');
@@ -506,7 +535,7 @@
 
         function cancelConnection() {
             if (conn) {
-                conn.send({ type: 'decline' });
+                sendData({ type: 'decline' });
                 conn.close();
                 conn = null;
             }
@@ -514,11 +543,11 @@
                 peer.destroy();
                 peer = null;
             }
+            pendingMessages = [];
             document.getElementById('waitingScreen').style.display = 'none';
             document.getElementById('onlineMenu').style.display = 'flex';
             document.getElementById('gameCanvas').style.display = 'none';
             document.getElementById('myId').textContent = 'Ожидание...';
-            // Restart peer connection
             tryCreatePeer();
             gameState = 'menu';
         }
@@ -803,6 +832,7 @@
                 peer.destroy();
                 peer = null;
             }
+            pendingMessages = [];
             tryCreatePeer();
             playerWins = 0;
             enemyWins = 0;
