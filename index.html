@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Стрелялка</title>
+    <title>Дуэлаь Стрелялка</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -570,14 +570,14 @@
                 gameData.enemy.angle = data.player.angle;
                 gameData.enemyBullets = data.bullets || [];
             } else if (data.type === 'hit') {
-                if (data.target === 'player') {
+                if (data.target === (isHost ? 'host' : 'client')) {
                     gameData.player.health = data.health;
-                } else if (data.target === 'enemy') {
+                } else {
                     gameData.enemy.health = data.health;
                 }
             } else if (data.type === 'scoreUpdate') {
-                playerWins = data.playerWins;
-                enemyWins = data.enemyWins;
+                playerWins = isHost ? data.hostWins : data.clientWins;
+                enemyWins = isHost ? data.clientWins : data.hostWins;
                 document.getElementById('scoreBoard').textContent = `Счёт: ${playerWins} - ${enemyWins}`;
             } else if (data.type === 'resetRound') {
                 resetRound();
@@ -673,34 +673,16 @@
                 conn.send({ type: 'gameUpdate', player: {x: gameData.player.x, y: gameData.player.y, angle: gameData.player.angle}, bullets: gameData.bullets });
             }
 
-            draw();
-            drawMiniMap();
-            checkBulletHits();
-
             if (isHost) {
-                if (gameData.player.health <= 0) {
-                    enemyWins++;
-                    if (enemyWins >= 5) {
-                        gameOver('Вы проиграли серию!');
-                        conn.send({ type: 'gameOver', message: 'Вы победили серию!' });
-                    } else {
-                        conn.send({ type: 'scoreUpdate', playerWins: playerWins, enemyWins: enemyWins });
-                        conn.send({ type: 'resetRound' });
-                        resetRound();
-                    }
-                } else if (gameData.enemy.health <= 0) {
-                    playerWins++;
-                    if (playerWins >= 5) {
-                        gameOver('Вы победили серию!');
-                        conn.send({ type: 'gameOver', message: 'Вы проиграли серию!' });
-                    } else {
-                        conn.send({ type: 'scoreUpdate', playerWins: playerWins, enemyWins: enemyWins });
-                        conn.send({ type: 'resetRound' });
-                        resetRound();
-                    }
-                }
+                checkBulletHits();
+                checkRoundEnd();
             }
 
+            draw();
+            drawMiniMap();
+
+            document.getElementById('playerHealth').style.width = `${gameData.player.health}%`;
+            document.getElementById('enemyHealth').style.width = `${gameData.enemy.health}%`;
             document.getElementById('scoreBoard').textContent = `Счёт: ${playerWins} - ${enemyWins}`;
         }
 
@@ -735,7 +717,7 @@
         }
 
         function checkBulletHits() {
-            // Проверяем попадания пуль игрока по врагу
+            // Проверяем попадания пуль игрока (хоста) по врагу (клиенту)
             for (let i = gameData.bullets.length - 1; i >= 0; i--) {
                 let b = gameData.bullets[i];
                 if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + 50 &&
@@ -743,12 +725,12 @@
                     gameData.enemy.health -= 20;
                     gameData.bullets.splice(i, 1);
                     if (conn && conn.open) {
-                        conn.send({ type: 'hit', target: 'enemy', health: gameData.enemy.health });
+                        conn.send({ type: 'hit', target: 'client', health: gameData.enemy.health });
                     }
                 }
             }
 
-            // Проверяем попадания пуль врага по игроку
+            // Проверяем попадания пуль врага (клиента) по игроку (хосту)
             for (let i = gameData.enemyBullets.length - 1; i >= 0; i--) {
                 let b = gameData.enemyBullets[i];
                 if (b.x > gameData.player.x && b.x < gameData.player.x + 50 &&
@@ -756,8 +738,40 @@
                     gameData.player.health -= 20;
                     gameData.enemyBullets.splice(i, 1);
                     if (conn && conn.open) {
-                        conn.send({ type: 'hit', target: 'player', health: gameData.player.health });
+                        conn.send({ type: 'hit', target: 'host', health: gameData.player.health });
                     }
+                }
+            }
+        }
+
+        function checkRoundEnd() {
+            if (gameData.player.health <= 0) {
+                enemyWins++;
+                if (enemyWins >= 5) {
+                    gameOver('Вы проиграли серию!');
+                    if (conn && conn.open) {
+                        conn.send({ type: 'gameOver', message: 'Вы победили серию!' });
+                    }
+                } else {
+                    if (conn && conn.open) {
+                        conn.send({ type: 'scoreUpdate', hostWins: playerWins, clientWins: enemyWins });
+                        conn.send({ type: 'resetRound' });
+                    }
+                    resetRound();
+                }
+            } else if (gameData.enemy.health <= 0) {
+                playerWins++;
+                if (playerWins >= 5) {
+                    gameOver('Вы победили серию!');
+                    if (conn && conn.open) {
+                        conn.send({ type: 'gameOver', message: 'Вы проиграли серию!' });
+                    }
+                } else {
+                    if (conn && conn.open) {
+                        conn.send({ type: 'scoreUpdate', hostWins: playerWins, clientWins: enemyWins });
+                        conn.send({ type: 'resetRound' });
+                    }
+                    resetRound();
                 }
             }
         }
@@ -813,9 +827,6 @@
             }
 
             ctx.restore();
-
-            document.getElementById('playerHealth').style.width = `${gameData.player.health}%`;
-            document.getElementById('enemyHealth').style.width = `${gameData.enemy.health}%`;
         }
 
         function drawMiniMap() {
@@ -844,7 +855,6 @@
             document.getElementById('miniMap').style.display = 'none';
             document.getElementById('gameCanvas').style.display = 'none';
             if (conn && conn.open) {
-                conn.send({ type: 'gameOver', message: message === 'Вы победили серию!' ? 'Вы проиграли серию!' : 'Вы победили серию!' });
                 conn.close();
                 conn = null;
             }
