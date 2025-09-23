@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Стрелялка</title>
+    <title>Дуэль Стрелялкаf</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -245,7 +245,7 @@
 
         <!-- Main Menu -->
         <div id="mainMenu" class="menu">
-            <div class="version">Версия 1.0</div>
+            <div class="version">Версия 1.1</div>
             <h1>Дуэль Стрелялка</h1>
             <input type="text" id="nicknameInput" placeholder="Введите ваш ник" maxlength="20">
             <button onclick="setNicknameAndShowOnline()">Онлайн режим</button>
@@ -339,6 +339,11 @@
         const PLAYER_HP = 100; // Начальное здоровье
         const BULLET_DAMAGE = 20; // Урон от пули
 
+        // Генерация 6-значного ID
+        function generateNumericId() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
         // Скрытие всех меню
         function hideAllMenus() {
             document.getElementById('mainMenu').style.display = 'none';
@@ -352,6 +357,17 @@
             document.getElementById('miniMap').style.display = 'none';
         }
 
+        // Сброс соединения PeerJS
+        function resetPeerConnection() {
+            if (peer && !peer.destroyed) {
+                peer.destroy();
+            }
+            peer = null;
+            pendingMessages = [];
+            document.getElementById('myId').textContent = 'Ожидание...';
+            console.log('Соединение PeerJS сброшено');
+        }
+
         // Инициализация
         window.onload = function() {
             canvas = document.getElementById('gameCanvas');
@@ -363,11 +379,16 @@
 
             // Инициализация PeerJS
             function tryCreatePeer(attempt = 1) {
-                if (attempt > 3) {
-                    alert('Не удалось подключиться к сигнальному серверу. Проверьте интернет и попробуйте снова.');
-                    document.getElementById('myId').textContent = 'Ошибка';
+                if (attempt > 5) {
+                    alert('Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.');
+                    resetPeerConnection();
+                    hideAllMenus();
+                    document.getElementById('mainMenu').style.display = 'flex';
+                    gameState = 'menu';
+                    console.log('Переключение на: mainMenu (после неудачных попыток)');
                     return;
                 }
+                resetPeerConnection();
                 let id = generateNumericId();
                 console.log(`Попытка подключения ${attempt}, ID: ${id}`);
                 peer = new Peer(id, {
@@ -380,12 +401,12 @@
                 });
 
                 let timeout = setTimeout(() => {
-                    if (document.getElementById('myId').textContent === 'Ожидание...') {
-                        console.log('Тайм-аут инициализации PeerJS');
+                    if (document.getElementById('myId').textContent === 'Ожидание...' && !peer.destroyed) {
+                        console.log(`Тайм-аут инициализации PeerJS (попытка ${attempt})`);
                         peer.destroy();
                         tryCreatePeer(attempt + 1);
                     }
-                }, 7000);
+                }, 10000);
 
                 peer.on('open', function() {
                     clearTimeout(timeout);
@@ -402,15 +423,15 @@
                         tryCreatePeer(attempt + 1);
                     } else if (err.type === 'disconnected' || err.type === 'server-disconnected') {
                         console.log('Попытка переподключения...');
-                        peer.reconnect();
+                        peer.destroy();
                         setTimeout(() => tryCreatePeer(attempt + 1), 2000);
-                    } else if (err.type === 'network') {
-                        alert('Ошибка сети. Проверьте подключение к интернету.');
-                        cancelConnection();
                     } else {
-                        document.getElementById('myId').textContent = 'Ошибка';
-                        alert('Ошибка подключения: ' + err.message);
-                        cancelConnection();
+                        alert(`Ошибка подключения: ${err.message}. Возвращение в главное меню.`);
+                        resetPeerConnection();
+                        hideAllMenus();
+                        document.getElementById('mainMenu').style.display = 'flex';
+                        gameState = 'menu';
+                        console.log('Переключение на: mainMenu (после ошибки PeerJS)');
                     }
                 });
             }
@@ -458,18 +479,24 @@
             hideAllMenus();
             document.getElementById('onlineMenu').style.display = 'flex';
             console.log('Переключение на: onlineMenu');
+            if (!peer || peer.destroyed) {
+                resetPeerConnection();
+                tryCreatePeer();
+            }
         }
 
         function backToMain() {
             hideAllMenus();
             document.getElementById('mainMenu').style.display = 'flex';
             console.log('Переключение на: mainMenu');
+            resetPeerConnection();
+            tryCreatePeer();
         }
 
         function copyId() {
             let idText = document.getElementById('myId').textContent;
             if (idText === 'Ожидание...' || idText === 'Ошибка') {
-                alert('ID ещё не готов!');
+                alert('ID ещё не готов! Подождите или вернитесь в главное меню.');
                 return;
             }
             navigator.clipboard.writeText(idText);
@@ -484,6 +511,12 @@
             if (conn) {
                 conn.close();
                 conn = null;
+            }
+            if (!peer || peer.destroyed) {
+                resetPeerConnection();
+                tryCreatePeer();
+                setTimeout(() => connectToFriend(), 2000); // Ждём создания нового Peer
+                return;
             }
             console.log(`Подключение к ID: ${friendId}`);
             conn = peer.connect(friendId, { reliable: true });
@@ -562,14 +595,9 @@
                 conn.close();
                 conn = null;
             }
-            if (peer) {
-                peer.destroy();
-                peer = null;
-            }
-            pendingMessages = [];
+            resetPeerConnection();
             hideAllMenus();
             document.getElementById('onlineMenu').style.display = 'flex';
-            document.getElementById('myId').textContent = 'Ожидание...';
             tryCreatePeer();
             gameState = 'menu';
             console.log('Переключение на: onlineMenu (после отмены)');
@@ -840,7 +868,12 @@
             ctx.lineTo(gunEndX, gunEndY);
             ctx.stroke();
 
-            ctx.fillStyle = '#f00';
+            let enemyColor = '#f00';
+            if (gameData.enemy.health < 30) {
+                let alpha = (Math.sin(Date.now() / 200) + 1) / 2;
+                enemyColor = `rgba(255, 0, 0, ${alpha})`;
+            }
+            ctx.fillStyle = enemyColor;
             ctx.fillRect(gameData.enemy.x, gameData.enemy.y, PLAYER_SIZE, PLAYER_SIZE);
             ctx.beginPath();
             ctx.moveTo(gameData.enemy.x + PLAYER_SIZE / 2, gameData.enemy.y + PLAYER_SIZE / 2);
@@ -886,11 +919,7 @@
                 conn.close();
                 conn = null;
             }
-            if (peer) {
-                peer.destroy();
-                peer = null;
-            }
-            pendingMessages = [];
+            resetPeerConnection();
             tryCreatePeer();
             playerWins = 0;
             enemyWins = 0;
