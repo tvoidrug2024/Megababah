@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэлаь Стрелялка</title>
+    <title>Дуэль Стрелялка</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -48,13 +48,11 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 100;
-            transition: opacity 0.7s ease-in-out;
+            transition: none;
         }
 
         .menu.hidden {
-            opacity: 0;
-            pointer-events: none;
+            display: none;
         }
 
         .menu h1 {
@@ -125,6 +123,11 @@
             right: 10px;
             font-size: clamp(0.8em, 2vw, 1em);
             color: #eee;
+            z-index: 250;
+        }
+
+        #mainMenu {
+            z-index: 100;
         }
 
         #onlineMenu {
@@ -132,6 +135,7 @@
             flex-direction: column;
             gap: 10px;
             max-width: 90%;
+            z-index: 110;
         }
 
         #myId {
@@ -148,6 +152,7 @@
         #waitingScreen {
             display: none;
             text-align: center;
+            z-index: 120;
         }
 
         #waitingScreen h2 {
@@ -186,6 +191,7 @@
             left: 20px;
             z-index: 50;
             font-size: clamp(1em, 3vw, 1.2em);
+            display: none;
         }
 
         .health-bar {
@@ -211,10 +217,13 @@
             font-size: clamp(1.2em, 4vw, 1.5em);
             color: #ffd700;
             text-shadow: 0 0 10px #ff0000;
+            display: none;
+            z-index: 50;
         }
 
         #gameOver {
             display: none;
+            z-index: 150;
         }
 
         #miniMap {
@@ -329,6 +338,19 @@
             return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
+        // Скрытие всех меню
+        function hideAllMenus() {
+            document.getElementById('mainMenu').style.display = 'none';
+            document.getElementById('onlineMenu').style.display = 'none';
+            document.getElementById('waitingScreen').style.display = 'none';
+            document.getElementById('invitePopup').style.display = 'none';
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('gameCanvas').style.display = 'none';
+            document.getElementById('ui').style.display = 'none';
+            document.getElementById('scoreBoard').style.display = 'none';
+            document.getElementById('miniMap').style.display = 'none';
+        }
+
         // Инициализация
         window.onload = function() {
             canvas = document.getElementById('gameCanvas');
@@ -432,15 +454,15 @@
 
         function setNicknameAndShowOnline() {
             nickname = document.getElementById('nicknameInput').value || 'Игрок';
-            document.getElementById('mainMenu').style.display = 'none';
+            hideAllMenus();
             document.getElementById('onlineMenu').style.display = 'flex';
-            document.getElementById('gameCanvas').style.display = 'none';
+            console.log('Переключение на: onlineMenu');
         }
 
         function backToMain() {
-            document.getElementById('onlineMenu').style.display = 'none';
+            hideAllMenus();
             document.getElementById('mainMenu').style.display = 'flex';
-            document.getElementById('gameCanvas').style.display = 'none';
+            console.log('Переключение на: mainMenu');
         }
 
         function copyId() {
@@ -526,11 +548,11 @@
         }
 
         function showWaiting(status) {
-            document.getElementById('onlineMenu').style.display = 'none';
+            hideAllMenus();
             document.getElementById('waitingScreen').style.display = 'flex';
             document.getElementById('waitingStatus').textContent = status;
-            document.getElementById('gameCanvas').style.display = 'none';
             gameState = 'waiting';
+            console.log('Переключение на: waitingScreen');
         }
 
         function cancelConnection() {
@@ -544,18 +566,20 @@
                 peer = null;
             }
             pendingMessages = [];
-            document.getElementById('waitingScreen').style.display = 'none';
+            hideAllMenus();
             document.getElementById('onlineMenu').style.display = 'flex';
-            document.getElementById('gameCanvas').style.display = 'none';
             document.getElementById('myId').textContent = 'Ожидание...';
             tryCreatePeer();
             gameState = 'menu';
+            console.log('Переключение на: onlineMenu (после отмены)');
         }
 
         function handleData(data) {
             if (data.type === 'invite' && isHost) {
+                hideAllMenus();
                 document.getElementById('inviterNick').textContent = data.nick;
                 document.getElementById('invitePopup').style.display = 'block';
+                console.log('Переключение на: invitePopup');
             } else if (data.type === 'accept') {
                 startGame();
             } else if (data.type === 'decline') {
@@ -569,16 +593,20 @@
                 gameData.enemy.y = data.player.y;
                 gameData.enemy.angle = data.player.angle;
                 gameData.enemyBullets = data.bullets || [];
+                console.log(`Синхронизация врага: x=${gameData.enemy.x}, y=${gameData.enemy.y}`);
             } else if (data.type === 'hit') {
                 if (data.target === (isHost ? 'host' : 'client')) {
                     gameData.player.health = data.health;
+                    console.log(`Урон игроку: health=${gameData.player.health}`);
                 } else {
                     gameData.enemy.health = data.health;
+                    console.log(`Урон врагу: health=${gameData.enemy.health}`);
                 }
             } else if (data.type === 'scoreUpdate') {
                 playerWins = isHost ? data.hostWins : data.clientWins;
                 enemyWins = isHost ? data.clientWins : data.hostWins;
                 document.getElementById('scoreBoard').textContent = `Счёт: ${playerWins} - ${enemyWins}`;
+                console.log(`Синхронизация счёта: ${playerWins} - ${enemyWins}`);
             } else if (data.type === 'resetRound') {
                 resetRound();
             } else if (data.type === 'gameOver') {
@@ -601,16 +629,14 @@
         }
 
         function startGame() {
-            document.getElementById('waitingScreen').style.display = 'none';
-            document.getElementById('invitePopup').style.display = 'none';
-            document.getElementById('mainMenu').style.display = 'none';
-            document.getElementById('onlineMenu').style.display = 'none';
+            hideAllMenus();
             document.getElementById('ui').style.display = 'block';
             document.getElementById('scoreBoard').style.display = 'block';
             document.getElementById('miniMap').style.display = 'block';
             document.getElementById('gameCanvas').style.display = 'block';
             gameState = 'playing';
             resetRound();
+            console.log('Переключение на: игровой экран');
         }
 
         function resetRound() {
@@ -629,6 +655,7 @@
                 gameData.enemy.x = 100;
                 gameData.enemy.y = 400;
             }
+            console.log(`Раунд сброшен: player x=${gameData.player.x}, y=${gameData.player.y}, enemy x=${gameData.enemy.x}, y=${gameData.enemy.y}`);
         }
 
         function shoot() {
@@ -646,6 +673,7 @@
                 life: 200
             };
             gameData.bullets.push(bullet);
+            console.log(`Выстрел: bullet x=${bullet.x}, y=${bullet.y}, vx=${bullet.vx}, vy=${bullet.vy}`);
         }
 
         function gameLoop() {
@@ -724,6 +752,7 @@
                     b.y > gameData.enemy.y && b.y < gameData.enemy.y + 50) {
                     gameData.enemy.health -= 20;
                     gameData.bullets.splice(i, 1);
+                    console.log(`Попадание по врагу: bullet x=${b.x}, y=${b.y}, enemy x=${gameData.enemy.x}, y=${gameData.enemy.y}, health=${gameData.enemy.health}`);
                     if (conn && conn.open) {
                         conn.send({ type: 'hit', target: 'client', health: gameData.enemy.health });
                     }
@@ -737,6 +766,7 @@
                     b.y > gameData.player.y && b.y < gameData.player.y + 50) {
                     gameData.player.health -= 20;
                     gameData.enemyBullets.splice(i, 1);
+                    console.log(`Попадание по игроку: bullet x=${b.x}, y=${b.y}, player x=${gameData.player.x}, y=${gameData.player.y}, health=${gameData.player.health}`);
                     if (conn && conn.open) {
                         conn.send({ type: 'hit', target: 'host', health: gameData.player.health });
                     }
@@ -848,12 +878,9 @@
 
         function gameOver(message) {
             gameState = 'gameover';
+            hideAllMenus();
             document.getElementById('gameOverText').textContent = message;
             document.getElementById('gameOver').style.display = 'flex';
-            document.getElementById('ui').style.display = 'none';
-            document.getElementById('scoreBoard').style.display = 'none';
-            document.getElementById('miniMap').style.display = 'none';
-            document.getElementById('gameCanvas').style.display = 'none';
             if (conn && conn.open) {
                 conn.close();
                 conn = null;
@@ -866,14 +893,15 @@
             tryCreatePeer();
             playerWins = 0;
             enemyWins = 0;
+            console.log('Переключение на: gameOver');
         }
 
         function returnToMain() {
             gameState = 'menu';
-            document.getElementById('gameOver').style.display = 'none';
+            hideAllMenus();
             document.getElementById('mainMenu').style.display = 'flex';
-            document.getElementById('gameCanvas').style.display = 'none';
             resetRound();
+            console.log('Переключение на: mainMenu (из gameOver)');
         }
     </script>
 </body>
