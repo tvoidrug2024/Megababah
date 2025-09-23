@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Стрелялка</title>
+    <title>Дуэль Стреляпплка</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -348,8 +348,8 @@
         let reloadStartTime = 0;
         let reloadProgress = 0;
         let gameData = {
-            player: { x: 100, y: 400, health: 100, angle: 0, ammo: 7, weapon: 'pistol' },
-            enemy: { x: 1900, y: 400, health: 100, angle: 0, ammo: 7, weapon: 'pistol' },
+            player: { x: 100, y: 400, health: 100, angle: 0, ammo: {pistol: 7, rifle: 30, shotgun: 6}, weapon: 'pistol' },
+            enemy: { x: 1900, y: 400, health: 100, angle: 0, ammo: {pistol: 7, rifle: 30, shotgun: 6}, weapon: 'pistol' },
             bullets: [],
             enemyBullets: []
         };
@@ -822,8 +822,8 @@
         function resetRound() {
             gameData.player.health = PLAYER_HP;
             gameData.enemy.health = PLAYER_HP;
-            gameData.player.ammo = WEAPONS[currentWeapon].maxAmmo;
-            gameData.enemy.ammo = WEAPONS[gameData.enemy.weapon].maxAmmo;
+            gameData.player.ammo = { pistol: WEAPONS.pistol.maxAmmo, rifle: WEAPONS.rifle.maxAmmo, shotgun: WEAPONS.shotgun.maxAmmo };
+            gameData.enemy.ammo = { pistol: WEAPONS.pistol.maxAmmo, rifle: WEAPONS.rifle.maxAmmo, shotgun: WEAPONS.shotgun.maxAmmo };
             gameData.bullets = [];
             gameData.enemyBullets = [];
             isReloading = false;
@@ -845,11 +845,11 @@
         }
 
         function updateWeaponIndicator() {
-            document.getElementById('weaponIndicator').textContent = `Оружие: ${WEAPONS[currentWeapon].name} (${gameData.player.ammo}/${WEAPONS[currentWeapon].maxAmmo})`;
+            document.getElementById('weaponIndicator').textContent = `Оружие: ${WEAPONS[currentWeapon].name} (${gameData.player.ammo[currentWeapon]}/${WEAPONS[currentWeapon].maxAmmo})`;
         }
 
         function shoot() {
-            if (gameState !== 'playing' || isReloading || gameData.player.ammo <= 0) return;
+            if (gameState !== 'playing' || isReloading || gameData.player.ammo[currentWeapon] <= 0) return;
             let now = Date.now();
             if (now - lastShotTime < WEAPONS[currentWeapon].fireRate) return;
 
@@ -885,10 +885,10 @@
                 bulletsToAdd.push(bullet);
             }
             gameData.bullets.push(...bulletsToAdd);
-            gameData.player.ammo--;
+            gameData.player.ammo[currentWeapon]--;
             updateWeaponIndicator();
             lastShotTime = now;
-            console.log(`Выстрел: weapon=${currentWeapon}, ammo=${gameData.player.ammo}`);
+            console.log(`Выстрел: weapon=${currentWeapon}, bullet x=${bulletsToAdd[0].x}, y=${bulletsToAdd[0].y}, ammo=${gameData.player.ammo[currentWeapon]}`);
 
             if (isShooting && currentWeapon === 'rifle') {
                 setTimeout(shoot, WEAPONS.rifle.fireRate);
@@ -908,7 +908,7 @@
             let dy = mouseY + cameraY - (gameData.player.y + PLAYER_SIZE / 2);
             gameData.player.angle = Math.atan2(dy, dx);
 
-            if (keys['r'] && gameData.player.ammo < WEAPONS[currentWeapon].maxAmmo && !isReloading) {
+            if (keys['r'] && gameData.player.ammo[currentWeapon] < WEAPONS[currentWeapon].maxAmmo && !isReloading) {
                 isReloading = true;
                 reloadStartTime = Date.now();
                 document.getElementById('reloadBar').style.display = 'block';
@@ -921,7 +921,7 @@
                 document.getElementById('reloadFill').style.width = `${reloadProgress * 100}%`;
                 if (reloadProgress >= 1) {
                     isReloading = false;
-                    gameData.player.ammo = WEAPONS[currentWeapon].maxAmmo;
+                    gameData.player.ammo[currentWeapon] = WEAPONS[currentWeapon].maxAmmo;
                     document.getElementById('reloadBar').style.display = 'none';
                     updateWeaponIndicator();
                     console.log('Перезарядка завершена:', currentWeapon);
@@ -939,7 +939,7 @@
             if (conn && conn.open) {
                 conn.send({
                     type: 'gameUpdate',
-                    player: { x: gameData.player.x, y: gameData.player.y, angle: gameData.player.angle, weapon: currentWeapon, ammo: gameData.player.ammo },
+                    player: { x: gameData.player.x, y: gameData.player.y, angle: gameData.player.angle, weapon: currentWeapon, ammo: gameData.player.ammo[currentWeapon] },
                     bullets: gameData.bullets
                 });
             }
@@ -988,6 +988,7 @@
         }
 
         function checkBulletHits() {
+            // Проверяем попадания пуль игрока (хоста) по врагу (клиенту)
             for (let i = gameData.bullets.length - 1; i >= 0; i--) {
                 let b = gameData.bullets[i];
                 if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + PLAYER_SIZE &&
@@ -1001,6 +1002,7 @@
                 }
             }
 
+            // Проверяем попадания пуль врага (клиента) по игроку (хосту)
             for (let i = gameData.enemyBullets.length - 1; i >= 0; i--) {
                 let b = gameData.enemyBullets[i];
                 if (b.x > gameData.player.x && b.x < gameData.player.x + PLAYER_SIZE &&
