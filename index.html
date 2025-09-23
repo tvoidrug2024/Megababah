@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Стрелялка</title>
+    <title>Дуэль Стреалялка</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -988,6 +988,7 @@
         }
 
         function checkBulletHits() {
+            // Проверяем попадания пуль игрока (хоста) по врагу (клиенту)
             for (let i = gameData.bullets.length - 1; i >= 0; i--) {
                 let b = gameData.bullets[i];
                 if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + PLAYER_SIZE &&
@@ -998,10 +999,10 @@
                     if (conn && conn.open) {
                         conn.send({ type: 'hit', target: 'client', health: gameData.enemy.health });
                     }
-                    if (currentWeapon !== 'shotgun') break; // Для дробовика продолжаем проверку остальных пуль
                 }
             }
 
+            // Проверяем попадания пуль врага (клиента) по игроку (хосту)
             for (let i = gameData.enemyBullets.length - 1; i >= 0; i--) {
                 let b = gameData.enemyBullets[i];
                 if (b.x > gameData.player.x && b.x < gameData.player.x + PLAYER_SIZE &&
@@ -1012,7 +1013,6 @@
                     if (conn && conn.open) {
                         conn.send({ type: 'hit', target: 'host', health: gameData.player.health });
                     }
-                    if (gameData.enemy.weapon !== 'shotgun') break; // Для дробовика продолжаем проверку
                 }
             }
         }
