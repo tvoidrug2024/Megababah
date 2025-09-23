@@ -333,10 +333,11 @@
             { x: 800, y: 300, w: 300, h: 50 }
         ];
 
-        // Генерация 6-значного ID
-        function generateNumericId() {
-            return Math.floor(100000 + Math.random() * 900000).toString();
-        }
+        // Константы для равных условий
+        const PLAYER_SIZE = 50; // Размер модели игрока (квадрат 50x50)
+        const GUN_LENGTH = 30; // Длина оружия
+        const PLAYER_HP = 100; // Начальное здоровье
+        const BULLET_DAMAGE = 20; // Урон от пули
 
         // Скрытие всех меню
         function hideAllMenus() {
@@ -636,12 +637,12 @@
             document.getElementById('gameCanvas').style.display = 'block';
             gameState = 'playing';
             resetRound();
-            console.log('Переключение на: игровой экран');
+            console.log('Переключение на: игровый экран');
         }
 
         function resetRound() {
-            gameData.player.health = 100;
-            gameData.enemy.health = 100;
+            gameData.player.health = PLAYER_HP;
+            gameData.enemy.health = PLAYER_HP;
             gameData.bullets = [];
             gameData.enemyBullets = [];
             if (playerSide === 'left') {
@@ -660,14 +661,14 @@
 
         function shoot() {
             if (gameState !== 'playing') return;
-            let dx = mouseX + cameraX - (gameData.player.x + 25);
-            let dy = mouseY + cameraY - (gameData.player.y + 25);
+            let dx = mouseX + cameraX - (gameData.player.x + PLAYER_SIZE / 2);
+            let dy = mouseY + cameraY - (gameData.player.y + PLAYER_SIZE / 2);
             let dist = Math.sqrt(dx*dx + dy*dy);
             let vx = (dx / dist) * 10;
             let vy = (dy / dist) * 10;
             let bullet = {
-                x: gameData.player.x + 25 + Math.cos(gameData.player.angle) * 30,
-                y: gameData.player.y + 25 + Math.sin(gameData.player.angle) * 30,
+                x: gameData.player.x + PLAYER_SIZE / 2 + Math.cos(gameData.player.angle) * GUN_LENGTH,
+                y: gameData.player.y + PLAYER_SIZE / 2 + Math.sin(gameData.player.angle) * GUN_LENGTH,
                 vx: vx,
                 vy: vy,
                 life: 200
@@ -681,16 +682,16 @@
 
             let speed = 5;
             if (keys['a']) gameData.player.x = Math.max(0, gameData.player.x - speed);
-            if (keys['d']) gameData.player.x = Math.min(mapWidth - 50, gameData.player.x + speed);
+            if (keys['d']) gameData.player.x = Math.min(mapWidth - PLAYER_SIZE, gameData.player.x + speed);
             if (keys['w']) gameData.player.y = Math.max(0, gameData.player.y - speed);
-            if (keys['s']) gameData.player.y = Math.min(mapHeight - 50, gameData.player.y + speed);
+            if (keys['s']) gameData.player.y = Math.min(mapHeight - PLAYER_SIZE, gameData.player.y + speed);
 
-            let dx = mouseX + cameraX - (gameData.player.x + 25);
-            let dy = mouseY + cameraY - (gameData.player.y + 25);
+            let dx = mouseX + cameraX - (gameData.player.x + PLAYER_SIZE / 2);
+            let dy = mouseY + cameraY - (gameData.player.y + PLAYER_SIZE / 2);
             gameData.player.angle = Math.atan2(dy, dx);
 
-            cameraX = Math.max(0, Math.min(mapWidth - canvas.width, gameData.player.x - canvas.width / 2 + 25));
-            cameraY = Math.max(0, Math.min(mapHeight - canvas.height, gameData.player.y - canvas.height / 2 + 25));
+            cameraX = Math.max(0, Math.min(mapWidth - canvas.width, gameData.player.x - canvas.width / 2 + PLAYER_SIZE / 2));
+            cameraY = Math.max(0, Math.min(mapHeight - canvas.height, gameData.player.y - canvas.height / 2 + PLAYER_SIZE / 2));
 
             updateBullets(gameData.bullets);
             updateBullets(gameData.enemyBullets);
@@ -734,8 +735,8 @@
 
         function checkWallCollisions() {
             for (let wall of walls) {
-                if (gameData.player.x + 50 > wall.x && gameData.player.x < wall.x + wall.w &&
-                    gameData.player.y + 50 > wall.y && gameData.player.y < wall.y + wall.h) {
+                if (gameData.player.x + PLAYER_SIZE > wall.x && gameData.player.x < wall.x + wall.w &&
+                    gameData.player.y + PLAYER_SIZE > wall.y && gameData.player.y < wall.y + wall.h) {
                     if (keys['a']) gameData.player.x += 5;
                     if (keys['d']) gameData.player.x -= 5;
                     if (keys['w']) gameData.player.y += 5;
@@ -748,9 +749,9 @@
             // Проверяем попадания пуль игрока (хоста) по врагу (клиенту)
             for (let i = gameData.bullets.length - 1; i >= 0; i--) {
                 let b = gameData.bullets[i];
-                if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + 50 &&
-                    b.y > gameData.enemy.y && b.y < gameData.enemy.y + 50) {
-                    gameData.enemy.health -= 20;
+                if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + PLAYER_SIZE &&
+                    b.y > gameData.enemy.y && b.y < gameData.enemy.y + PLAYER_SIZE) {
+                    gameData.enemy.health -= BULLET_DAMAGE;
                     gameData.bullets.splice(i, 1);
                     console.log(`Попадание по врагу: bullet x=${b.x}, y=${b.y}, enemy x=${gameData.enemy.x}, y=${gameData.enemy.y}, health=${gameData.enemy.health}`);
                     if (conn && conn.open) {
@@ -762,9 +763,9 @@
             // Проверяем попадания пуль врага (клиента) по игроку (хосту)
             for (let i = gameData.enemyBullets.length - 1; i >= 0; i--) {
                 let b = gameData.enemyBullets[i];
-                if (b.x > gameData.player.x && b.x < gameData.player.x + 50 &&
-                    b.y > gameData.player.y && b.y < gameData.player.y + 50) {
-                    gameData.player.health -= 20;
+                if (b.x > gameData.player.x && b.x < gameData.player.x + PLAYER_SIZE &&
+                    b.y > gameData.player.y && b.y < gameData.player.y + PLAYER_SIZE) {
+                    gameData.player.health -= BULLET_DAMAGE;
                     gameData.enemyBullets.splice(i, 1);
                     console.log(`Попадание по игроку: bullet x=${b.x}, y=${b.y}, player x=${gameData.player.x}, y=${gameData.player.y}, health=${gameData.player.health}`);
                     if (conn && conn.open) {
@@ -829,22 +830,22 @@
                 playerColor = `rgba(0, 0, 255, ${alpha})`;
             }
             ctx.fillStyle = playerColor;
-            ctx.fillRect(gameData.player.x, gameData.player.y, 50, 50);
+            ctx.fillRect(gameData.player.x, gameData.player.y, PLAYER_SIZE, PLAYER_SIZE);
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 5;
             ctx.beginPath();
-            ctx.moveTo(gameData.player.x + 25, gameData.player.y + 25);
-            let gunEndX = gameData.player.x + 25 + Math.cos(gameData.player.angle) * 30;
-            let gunEndY = gameData.player.y + 25 + Math.sin(gameData.player.angle) * 30;
+            ctx.moveTo(gameData.player.x + PLAYER_SIZE / 2, gameData.player.y + PLAYER_SIZE / 2);
+            let gunEndX = gameData.player.x + PLAYER_SIZE / 2 + Math.cos(gameData.player.angle) * GUN_LENGTH;
+            let gunEndY = gameData.player.y + PLAYER_SIZE / 2 + Math.sin(gameData.player.angle) * GUN_LENGTH;
             ctx.lineTo(gunEndX, gunEndY);
             ctx.stroke();
 
             ctx.fillStyle = '#f00';
-            ctx.fillRect(gameData.enemy.x, gameData.enemy.y, 50, 50);
+            ctx.fillRect(gameData.enemy.x, gameData.enemy.y, PLAYER_SIZE, PLAYER_SIZE);
             ctx.beginPath();
-            ctx.moveTo(gameData.enemy.x + 25, gameData.enemy.y + 25);
-            let enemyGunEndX = gameData.enemy.x + 25 + Math.cos(gameData.enemy.angle) * 30;
-            let enemyGunEndY = gameData.enemy.y + 25 + Math.sin(gameData.enemy.angle) * 30;
+            ctx.moveTo(gameData.enemy.x + PLAYER_SIZE / 2, gameData.enemy.y + PLAYER_SIZE / 2);
+            let enemyGunEndX = gameData.enemy.x + PLAYER_SIZE / 2 + Math.cos(gameData.enemy.angle) * GUN_LENGTH;
+            let enemyGunEndY = gameData.enemy.y + PLAYER_SIZE / 2 + Math.sin(gameData.enemy.angle) * GUN_LENGTH;
             ctx.lineTo(enemyGunEndX, enemyGunEndY);
             ctx.stroke();
 
@@ -870,10 +871,10 @@
             }
 
             miniMapCtx.fillStyle = '#00f';
-            miniMapCtx.fillRect(gameData.player.x * scaleX, gameData.player.y * scaleY, 50 * scaleX, 50 * scaleY);
+            miniMapCtx.fillRect(gameData.player.x * scaleX, gameData.player.y * scaleY, PLAYER_SIZE * scaleX, PLAYER_SIZE * scaleY);
 
             miniMapCtx.fillStyle = '#f00';
-            miniMapCtx.fillRect(gameData.enemy.x * scaleX, gameData.enemy.y * scaleY, 50 * scaleX, 50 * scaleY);
+            miniMapCtx.fillRect(gameData.enemy.x * scaleX, gameData.enemy.y * scaleY, PLAYER_SIZE * scaleX, PLAYER_SIZE * scaleY);
         }
 
         function gameOver(message) {
