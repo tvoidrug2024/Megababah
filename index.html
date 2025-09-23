@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Дуэль Старелялка</title>
+    <title>Дуэль Стреалялка</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -19,7 +19,6 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            box-sizing: border-box;
         }
 
         #gameContainer {
@@ -42,15 +41,14 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             background: rgba(0, 0, 0, 0.85);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             transition: none;
-            box-sizing: border-box;
         }
 
         .menu.hidden {
@@ -136,9 +134,7 @@
             display: none;
             flex-direction: column;
             gap: 10px;
-            width: 100%;
-            justify-content: center;
-            align-items: center;
+            max-width: 90%;
             z-index: 110;
         }
 
@@ -214,29 +210,6 @@
             border-radius: 4px;
         }
 
-        #weaponIndicator {
-            margin: 10px 0;
-            color: #ffd700;
-            text-shadow: 0 0 10px #ff0000;
-        }
-
-        .reload-bar {
-            width: clamp(200px, 40vw, 250px);
-            height: 10px;
-            background: #222;
-            border: 2px solid #fff;
-            margin: 5px 0;
-            border-radius: 5px;
-            display: none;
-        }
-
-        .reload-fill {
-            height: 100%;
-            background: #ffd700;
-            transition: width 0.1s linear;
-            border-radius: 3px;
-        }
-
         #scoreBoard {
             position: absolute;
             top: 20px;
@@ -272,7 +245,7 @@
 
         <!-- Main Menu -->
         <div id="mainMenu" class="menu">
-            <div class="version">Версия 1.2</div>
+            <div class="version">Версия 1.0</div>
             <h1>Дуэль Стрелялка</h1>
             <input type="text" id="nicknameInput" placeholder="Введите ваш ник" maxlength="20">
             <button onclick="setNicknameAndShowOnline()">Онлайн режим</button>
@@ -308,8 +281,6 @@
         <div id="ui">
             <div>Здоровье: <div class="health-bar"><div class="health-fill" id="playerHealth" style="width: 100%;"></div></div></div>
             <div>Враг: <div class="health-bar"><div class="health-fill" id="enemyHealth" style="width: 100%;"></div></div></div>
-            <div id="weaponIndicator">Оружие: Desert Eagle (7/7)</div>
-            <div class="reload-bar" id="reloadBar"><div class="reload-fill" id="reloadFill" style="width: 0%;"></div></div>
         </div>
 
         <div id="scoreBoard">Счёт: 0 - 0</div>
@@ -343,146 +314,28 @@
         let keys = {};
         let mouseX = 0, mouseY = 0;
         let pendingMessages = [];
-        let currentWeapon = 'pistol'; // pistol или rifle
-        let isShooting = false;
-        let lastShotTime = 0;
-        let isReloading = false;
-        let reloadStartTime = 0;
-        let reloadProgress = 0;
         let gameData = {
-            player: { x: 100, y: 400, health: 100, angle: 0, ammo: 7, weapon: 'pistol' },
-            enemy: { x: 1900, y: 400, health: 100, angle: 0, ammo: 7, weapon: 'pistol' },
+            player: { x: 100, y: 400, health: 100, angle: 0 },
+            enemy: { x: 1900, y: 400, health: 100, angle: 0 },
             bullets: [],
             enemyBullets: []
         };
-        let walls = [];
+        let walls = [
+            { x: 300, y: 200, w: 100, h: 400 },
+            { x: 500, y: 500, w: 200, h: 100 },
+            { x: 700, y: 100, w: 50, h: 300 },
+            { x: 900, y: 600, w: 150, h: 50 },
+            { x: 1100, y: 200, w: 50, h: 400 },
+            { x: 1300, y: 100, w: 200, h: 100 },
+            { x: 1500, y: 500, w: 100, h: 200 },
+            { x: 400, y: 0, w: 50, h: 150 },
+            { x: 1600, y: 650, w: 100, h: 50 },
+            { x: 800, y: 300, w: 300, h: 50 }
+        ];
 
-        // Константы
-        const PLAYER_SIZE = 50;
-        const PLAYER_HP = 100;
-        const WEAPONS = {
-            pistol: { name: 'Desert Eagle', maxAmmo: 7, damage: 50, fireRate: 1000, reloadTime: 2000, gunLength: 20 },
-            rifle: { name: 'Автомат', maxAmmo: 30, damage: 20, fireRate: 100, reloadTime: 3000, gunLength: 40 }
-        };
-
-        // Генерация случайной карты
-        function generateRandomMap() {
-            walls = [];
-            const numWalls = Math.floor(Math.random() * 6) + 5; // 5–10 стен
-            const playerSpawn1 = { x: 100, y: 400, w: PLAYER_SIZE, h: PLAYER_SIZE };
-            const playerSpawn2 = { x: 1900, y: 400, w: PLAYER_SIZE, h: PLAYER_SIZE };
-
-            for (let i = 0; i < numWalls; i++) {
-                let wall;
-                let attempts = 0;
-                const maxAttempts = 50;
-
-                do {
-                    attempts++;
-                    wall = {
-                        x: Math.floor(Math.random() * (mapWidth - 200)),
-                        y: Math.floor(Math.random() * (mapHeight - 400)),
-                        w: Math.floor(Math.random() * 150) + 50,
-                        h: Math.floor(Math.random() * 350) + 50
-                    };
-
-                    // Проверка на пересечение с зонами спавна
-                    if (rectIntersects(wall, playerSpawn1) || rectIntersects(wall, playerSpawn2)) {
-                        continue;
-                    }
-
-                    // Проверка на пересечение с другими стенами
-                    let intersects = false;
-                    for (let existingWall of walls) {
-                        if (rectIntersects(wall, existingWall)) {
-                            intersects = true;
-                            break;
-                        }
-                    }
-                    if (intersects) continue;
-
-                    // Проверка пути с помощью A*
-                    walls.push(wall);
-                    if (hasPath({ x: 100, y: 400 }, { x: 1900, y: 400 })) {
-                        break; // Стена валидна
-                    }
-                    walls.pop(); // Удаляем, если путь невозможен
-                } while (attempts < maxAttempts);
-
-                if (attempts >= maxAttempts) {
-                    console.log('Не удалось разместить стену, пропускаем');
-                }
-            }
-            console.log('Сгенерирована карта:', walls);
-            return walls;
-        }
-
-        function rectIntersects(r1, r2) {
-            return !(r1.x + r1.w < r2.x || r1.x > r2.x + r2.w || r1.y + r1.h < r2.y || r1.y > r2.y + r2.h);
-        }
-
-        // A* для проверки пути
-        function hasPath(start, end) {
-            const gridSize = 50;
-            const gridWidth = Math.ceil(mapWidth / gridSize);
-            const gridHeight = Math.ceil(mapHeight / gridSize);
-            const grid = Array(gridHeight).fill().map(() => Array(gridWidth).fill(false));
-
-            // Заполняем стены в сетке
-            for (let wall of walls) {
-                let startX = Math.floor(wall.x / gridSize);
-                let startY = Math.floor(wall.y / gridSize);
-                let endX = Math.ceil((wall.x + wall.w) / gridSize);
-                let endY = Math.ceil((wall.y + wall.h) / gridSize);
-                for (let y = startY; y < endY; y++) {
-                    for (let x = startX; x < endX; x++) {
-                        if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-                            grid[y][x] = true;
-                        }
-                    }
-                }
-            }
-
-            const openSet = [{ x: Math.floor(start.x / gridSize), y: Math.floor(start.y / gridSize), f: 0, g: 0, h: 0, parent: null }];
-            const closedSet = new Set();
-            const endX = Math.floor(end.x / gridSize);
-            const endY = Math.floor(end.y / gridSize);
-
-            while (openSet.length > 0) {
-                let current = openSet.reduce((a, b) => a.f < b.f ? a : b);
-                if (current.x === endX && current.y === endY) return true;
-
-                openSet.splice(openSet.indexOf(current), 1);
-                closedSet.add(`${current.x},${current.y}`);
-
-                const neighbors = [
-                    { x: current.x + 1, y: current.y },
-                    { x: current.x - 1, y: current.y },
-                    { x: current.x, y: current.y + 1 },
-                    { x: current.x, y: current.y - 1 }
-                ];
-
-                for (let neighbor of neighbors) {
-                    if (neighbor.x < 0 || neighbor.x >= gridWidth || neighbor.y < 0 || neighbor.y >= gridHeight || grid[neighbor.y][neighbor.x]) {
-                        continue;
-                    }
-                    if (closedSet.has(`${neighbor.x},${neighbor.y}`)) continue;
-
-                    let g = current.g + 1;
-                    let h = Math.abs(neighbor.x - endX) + Math.abs(neighbor.y - endY);
-                    let f = g + h;
-
-                    let existing = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
-                    if (!existing) {
-                        openSet.push({ x: neighbor.x, y: neighbor.y, f, g, h, parent: current });
-                    } else if (g < existing.g) {
-                        existing.g = g;
-                        existing.f = f;
-                        existing.parent = current;
-                    }
-                }
-            }
-            return false;
+        // Генерация 6-значного ID
+        function generateNumericId() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
         // Скрытие всех меню
@@ -499,18 +352,6 @@
             console.log('Все меню скрыты');
         }
 
-        // Сброс соединения PeerJS
-        function resetPeerConnection() {
-            if (peer && !peer.destroyed) {
-                peer.destroy();
-            }
-            peer = null;
-            conn = null;
-            pendingMessages = [];
-            document.getElementById('myId').textContent = 'Ожидание...';
-            console.log('Соединение PeerJS сброшено');
-        }
-
         // Инициализация
         window.onload = function() {
             canvas = document.getElementById('gameCanvas');
@@ -520,6 +361,74 @@
             miniMapCanvas = document.getElementById('miniMap');
             miniMapCtx = miniMapCanvas.getContext('2d');
 
+            // Инициализация PeerJS
+            function tryCreatePeer(attempt = 1) {
+                if (attempt > 3) {
+                    alert('Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.');
+                    document.getElementById('myId').textContent = 'Ошибка';
+                    return;
+                }
+                let id = generateNumericId();
+                console.log(`Попытка подключения ${attempt}, ID: ${id}`);
+                peer = new Peer(id, {
+                    host: '0.peerjs.com',
+                    port: 443,
+                    path: '/',
+                    secure: true,
+                    pingInterval: 10000,
+                    debug: 2
+                });
+
+                let timeout = setTimeout(() => {
+                    if (document.getElementById('myId').textContent === 'Ожидание...') {
+                        console.log('Тайм-аут инициализации PeerJS');
+                        peer.destroy();
+                        tryCreatePeer(attempt + 1);
+                    }
+                }, 7000);
+
+                peer.on('open', function() {
+                    clearTimeout(timeout);
+                    document.getElementById('myId').textContent = id;
+                    document.getElementById('waitingStatus').textContent = 'Готов к подключению';
+                    console.log(`PeerJS открыт, ID: ${id}`);
+                });
+
+                peer.on('error', function(err) {
+                    console.error('Ошибка PeerJS:', err);
+                    clearTimeout(timeout);
+                    if (err.type === 'unavailable-id') {
+                        console.log('ID занят, пробуем другой');
+                        tryCreatePeer(attempt + 1);
+                    } else if (err.type === 'disconnected' || err.type === 'server-disconnected') {
+                        console.log('Попытка переподключения...');
+                        peer.reconnect();
+                        setTimeout(() => tryCreatePeer(attempt + 1), 2000);
+                    } else if (err.type === 'network') {
+                        alert('Ошибка сети. Проверьте подключение к интернету.');
+                        cancelConnection();
+                    } else {
+                        document.getElementById('myId').textContent = 'Ошибка';
+                        alert('Ошибка подключения: ' + err.message);
+                        cancelConnection();
+                    }
+                });
+            }
+
+            tryCreatePeer();
+
+            peer.on('connection', function(connection) {
+                if (conn) {
+                    console.log('Отклоняем дублирующее соединение');
+                    connection.close();
+                    return;
+                }
+                conn = connection;
+                setupConnection();
+                isHost = true;
+                showWaiting('Ожидание приглашения...');
+            });
+
             // События
             window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
             window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -527,24 +436,7 @@
                 mouseX = e.clientX;
                 mouseY = e.clientY;
             });
-            canvas.addEventListener('mousedown', (e) => {
-                if (e.button === 0 && gameState === 'playing' && !isReloading) {
-                    isShooting = true;
-                    shoot();
-                }
-            });
-            canvas.addEventListener('mouseup', (e) => {
-                if (e.button === 0) {
-                    isShooting = false;
-                }
-            });
-            canvas.addEventListener('wheel', (e) => {
-                if (gameState === 'playing' && !isReloading) {
-                    currentWeapon = e.deltaY < 0 ? 'pistol' : 'rifle';
-                    updateWeaponIndicator();
-                    console.log(`Оружие переключено на: ${currentWeapon}`);
-                }
-            });
+            canvas.addEventListener('click', shoot);
 
             window.addEventListener('resize', () => {
                 canvas.width = window.innerWidth;
@@ -563,102 +455,25 @@
 
         function setNicknameAndShowOnline() {
             nickname = document.getElementById('nicknameInput').value || 'Игрок';
-            try {
-                hideAllMenus();
-                document.getElementById('onlineMenu').style.display = 'flex';
-                console.log('Переключение на: onlineMenu');
-                resetPeerConnection();
-                tryCreatePeer();
-            } catch (e) {
-                console.error('Ошибка при переходе в онлайн-режим:', e);
-                alert('Ошибка перехода в онлайн-режим. Попробуйте снова.');
-                hideAllMenus();
-                document.getElementById('mainMenu').style.display = 'flex';
-            }
+            hideAllMenus();
+            document.getElementById('onlineMenu').style.display = 'flex';
+            console.log('Переключение на: onlineMenu');
         }
 
         function backToMain() {
             hideAllMenus();
             document.getElementById('mainMenu').style.display = 'flex';
             console.log('Переключение на: mainMenu');
-            resetPeerConnection();
-            tryCreatePeer();
         }
 
         function copyId() {
             let idText = document.getElementById('myId').textContent;
             if (idText === 'Ожидание...' || idText === 'Ошибка') {
-                alert('ID ещё не готов! Подождите или вернитесь в главное меню.');
+                alert('ID ещё не готов!');
                 return;
             }
             navigator.clipboard.writeText(idText);
             alert('ID скопирован!');
-        }
-
-        function tryCreatePeer(attempt = 1) {
-            if (attempt > 5) {
-                alert('Не удалось подключиться к серверу. Проверьте интернет и попробуйте снова.');
-                resetPeerConnection();
-                hideAllMenus();
-                document.getElementById('mainMenu').style.display = 'flex';
-                gameState = 'menu';
-                console.log('Переключение на: mainMenu (после неудачных попыток)');
-                return;
-            }
-            resetPeerConnection();
-            let id = Math.floor(100000 + Math.random() * 900000).toString();
-            console.log(`Попытка подключения ${attempt}, ID: ${id}`);
-            peer = new Peer(id, {
-                host: '0.peerjs.com',
-                port: 443,
-                path: '/',
-                secure: true,
-                pingInterval: 10000,
-                debug: 2
-            });
-
-            let timeout = setTimeout(() => {
-                if (document.getElementById('myId').textContent === 'Ожидание...' && !peer.destroyed) {
-                    console.log(`Тайм-аут инициализации PeerJS (попытка ${attempt})`);
-                    peer.destroy();
-                    tryCreatePeer(attempt + 1);
-                }
-            }, 10000);
-
-            peer.on('open', function() {
-                clearTimeout(timeout);
-                document.getElementById('myId').textContent = id;
-                document.getElementById('waitingStatus').textContent = 'Готов к подключению';
-                console.log(`PeerJS открыт, ID: ${id}`);
-            });
-
-            peer.on('error', function(err) {
-                console.error('Ошибка PeerJS:', err);
-                clearTimeout(timeout);
-                if (err.type === 'unavailable-id') {
-                    console.log('ID занят, пробуем другой');
-                    tryCreatePeer(attempt + 1);
-                } else {
-                    alert(`Ошибка подключения: ${err.message}. Возвращение в главное меню.`);
-                    resetPeerConnection();
-                    hideAllMenus();
-                    document.getElementById('mainMenu').style.display = 'flex';
-                    gameState = 'menu';
-                    console.log('Переключение на: mainMenu (после ошибки PeerJS)');
-                }
-            });
-
-            peer.on('connection', function(connection) {
-                if (conn) {
-                    console.log('Отклоняем дублирующее соединение');
-                    connection.close();
-                    return;
-                }
-                conn = connection;
-                setupConnection();
-                isHost = true;
-                showWaiting('Ожидание приглашения...');
-            });
         }
 
         function connectToFriend() {
@@ -670,17 +485,12 @@
                 conn.close();
                 conn = null;
             }
-            if (!peer || peer.destroyed) {
-                resetPeerConnection();
-                tryCreatePeer();
-                setTimeout(() => connectToFriend(), 2000);
-                return;
-            }
             console.log(`Подключение к ID: ${friendId}`);
             conn = peer.connect(friendId, { reliable: true });
             setupConnection();
             showWaiting('Подключение к другу...');
 
+            // Тайм-аут подключения
             setTimeout(() => {
                 if (gameState === 'waiting' && (!conn || !conn.open)) {
                     alert('Время ожидания подключения истекло. Попробуйте снова.');
@@ -741,10 +551,8 @@
                 conn.close();
                 conn = null;
             }
-            resetPeerConnection();
             hideAllMenus();
             document.getElementById('onlineMenu').style.display = 'flex';
-            tryCreatePeer();
             gameState = 'menu';
             console.log('Переключение на: onlineMenu (после отмены)');
         }
@@ -763,18 +571,12 @@
             } else if (data.type === 'side') {
                 playerSide = data.side === 'left' ? 'right' : 'left';
                 startGame();
-            } else if (data.type === 'map') {
-                walls = data.walls;
-                console.log('Получена карта:', walls);
-                startGame();
             } else if (data.type === 'gameUpdate') {
                 gameData.enemy.x = data.player.x;
                 gameData.enemy.y = data.player.y;
                 gameData.enemy.angle = data.player.angle;
-                gameData.enemy.weapon = data.player.weapon;
-                gameData.enemy.ammo = data.player.ammo;
                 gameData.enemyBullets = data.bullets || [];
-                console.log(`Синхронизация врага: x=${gameData.enemy.x}, y=${gameData.enemy.y}, weapon=${gameData.enemy.weapon}, ammo=${gameData.enemy.ammo}`);
+                console.log(`Синхронизация врага: x=${gameData.enemy.x}, y=${gameData.enemy.y}`);
             } else if (data.type === 'hit') {
                 if (data.target === (isHost ? 'host' : 'client')) {
                     gameData.player.health = data.health;
@@ -800,11 +602,7 @@
             conn.send({ type: 'accept' });
             playerSide = Math.random() > 0.5 ? 'left' : 'right';
             conn.send({ type: 'side', side: playerSide });
-            if (isHost) {
-                walls = generateRandomMap();
-                conn.send({ type: 'map', walls });
-                startGame();
-            }
+            startGame();
         }
 
         function declineInvite() {
@@ -821,20 +619,14 @@
             document.getElementById('gameCanvas').style.display = 'block';
             gameState = 'playing';
             resetRound();
-            updateWeaponIndicator();
             console.log('Переключение на: игровый экран');
         }
 
         function resetRound() {
-            gameData.player.health = PLAYER_HP;
-            gameData.enemy.health = PLAYER_HP;
-            gameData.player.ammo = WEAPONS[currentWeapon].maxAmmo;
-            gameData.enemy.ammo = WEAPONS[gameData.enemy.weapon].maxAmmo;
+            gameData.player.health = 100;
+            gameData.enemy.health = 100;
             gameData.bullets = [];
             gameData.enemyBullets = [];
-            isReloading = false;
-            reloadProgress = 0;
-            document.getElementById('reloadBar').style.display = 'none';
             if (playerSide === 'left') {
                 gameData.player.x = 100;
                 gameData.player.y = 400;
@@ -846,41 +638,25 @@
                 gameData.enemy.x = 100;
                 gameData.enemy.y = 400;
             }
-            updateWeaponIndicator();
             console.log(`Раунд сброшен: player x=${gameData.player.x}, y=${gameData.player.y}, enemy x=${gameData.enemy.x}, y=${gameData.enemy.y}`);
         }
 
-        function updateWeaponIndicator() {
-            document.getElementById('weaponIndicator').textContent = `Оружие: ${WEAPONS[currentWeapon].name} (${gameData.player.ammo}/${WEAPONS[currentWeapon].maxAmmo})`;
-        }
-
         function shoot() {
-            if (gameState !== 'playing' || isReloading || gameData.player.ammo <= 0) return;
-            let now = Date.now();
-            if (now - lastShotTime < WEAPONS[currentWeapon].fireRate) return;
-
-            let dx = mouseX + cameraX - (gameData.player.x + PLAYER_SIZE / 2);
-            let dy = mouseY + cameraY - (gameData.player.y + PLAYER_SIZE / 2);
+            if (gameState !== 'playing') return;
+            let dx = mouseX + cameraX - (gameData.player.x + 25);
+            let dy = mouseY + cameraY - (gameData.player.y + 25);
             let dist = Math.sqrt(dx*dx + dy*dy);
             let vx = (dx / dist) * 10;
             let vy = (dy / dist) * 10;
             let bullet = {
-                x: gameData.player.x + PLAYER_SIZE / 2 + Math.cos(gameData.player.angle) * WEAPONS[currentWeapon].gunLength,
-                y: gameData.player.y + PLAYER_SIZE / 2 + Math.sin(gameData.player.angle) * WEAPONS[currentWeapon].gunLength,
+                x: gameData.player.x + 25 + Math.cos(gameData.player.angle) * 30,
+                y: gameData.player.y + 25 + Math.sin(gameData.player.angle) * 30,
                 vx: vx,
                 vy: vy,
-                damage: WEAPONS[currentWeapon].damage,
                 life: 200
             };
             gameData.bullets.push(bullet);
-            gameData.player.ammo--;
-            updateWeaponIndicator();
-            lastShotTime = now;
-            console.log(`Выстрел: weapon=${currentWeapon}, bullet x=${bullet.x}, y=${bullet.y}, ammo=${gameData.player.ammo}`);
-
-            if (isShooting && currentWeapon === 'rifle') {
-                setTimeout(shoot, WEAPONS.rifle.fireRate);
-            }
+            console.log(`Выстрел: bullet x=${bullet.x}, y=${bullet.y}, vx=${bullet.vx}, vy=${bullet.vy}`);
         }
 
         function gameLoop() {
@@ -888,36 +664,16 @@
 
             let speed = 5;
             if (keys['a']) gameData.player.x = Math.max(0, gameData.player.x - speed);
-            if (keys['d']) gameData.player.x = Math.min(mapWidth - PLAYER_SIZE, gameData.player.x + speed);
+            if (keys['d']) gameData.player.x = Math.min(mapWidth - 50, gameData.player.x + speed);
             if (keys['w']) gameData.player.y = Math.max(0, gameData.player.y - speed);
-            if (keys['s']) gameData.player.y = Math.min(mapHeight - PLAYER_SIZE, gameData.player.y + speed);
+            if (keys['s']) gameData.player.y = Math.min(mapHeight - 50, gameData.player.y + speed);
 
-            let dx = mouseX + cameraX - (gameData.player.x + PLAYER_SIZE / 2);
-            let dy = mouseY + cameraY - (gameData.player.y + PLAYER_SIZE / 2);
+            let dx = mouseX + cameraX - (gameData.player.x + 25);
+            let dy = mouseY + cameraY - (gameData.player.y + 25);
             gameData.player.angle = Math.atan2(dy, dx);
 
-            if (keys['r'] && gameData.player.ammo < WEAPONS[currentWeapon].maxAmmo && !isReloading) {
-                isReloading = true;
-                reloadStartTime = Date.now();
-                document.getElementById('reloadBar').style.display = 'block';
-                console.log('Начало перезарядки:', currentWeapon);
-            }
-
-            if (isReloading) {
-                let elapsed = Date.now() - reloadStartTime;
-                reloadProgress = Math.min(elapsed / WEAPONS[currentWeapon].reloadTime, 1);
-                document.getElementById('reloadFill').style.width = `${reloadProgress * 100}%`;
-                if (reloadProgress >= 1) {
-                    isReloading = false;
-                    gameData.player.ammo = WEAPONS[currentWeapon].maxAmmo;
-                    document.getElementById('reloadBar').style.display = 'none';
-                    updateWeaponIndicator();
-                    console.log('Перезарядка завершена:', currentWeapon);
-                }
-            }
-
-            cameraX = Math.max(0, Math.min(mapWidth - canvas.width, gameData.player.x - canvas.width / 2 + PLAYER_SIZE / 2));
-            cameraY = Math.max(0, Math.min(mapHeight - canvas.height, gameData.player.y - canvas.height / 2 + PLAYER_SIZE / 2));
+            cameraX = Math.max(0, Math.min(mapWidth - canvas.width, gameData.player.x - canvas.width / 2 + 25));
+            cameraY = Math.max(0, Math.min(mapHeight - canvas.height, gameData.player.y - canvas.height / 2 + 25));
 
             updateBullets(gameData.bullets);
             updateBullets(gameData.enemyBullets);
@@ -925,11 +681,7 @@
             checkWallCollisions();
 
             if (conn && conn.open) {
-                conn.send({
-                    type: 'gameUpdate',
-                    player: { x: gameData.player.x, y: gameData.player.y, angle: gameData.player.angle, weapon: currentWeapon, ammo: gameData.player.ammo },
-                    bullets: gameData.bullets
-                });
+                conn.send({ type: 'gameUpdate', player: {x: gameData.player.x, y: gameData.player.y, angle: gameData.player.angle}, bullets: gameData.bullets });
             }
 
             if (isHost) {
@@ -965,8 +717,8 @@
 
         function checkWallCollisions() {
             for (let wall of walls) {
-                if (gameData.player.x + PLAYER_SIZE > wall.x && gameData.player.x < wall.x + wall.w &&
-                    gameData.player.y + PLAYER_SIZE > wall.y && gameData.player.y < wall.y + wall.h) {
+                if (gameData.player.x + 50 > wall.x && gameData.player.x < wall.x + wall.w &&
+                    gameData.player.y + 50 > wall.y && gameData.player.y < wall.y + wall.h) {
                     if (keys['a']) gameData.player.x += 5;
                     if (keys['d']) gameData.player.x -= 5;
                     if (keys['w']) gameData.player.y += 5;
@@ -976,26 +728,28 @@
         }
 
         function checkBulletHits() {
+            // Проверяем попадания пуль игрока (хоста) по врагу (клиенту)
             for (let i = gameData.bullets.length - 1; i >= 0; i--) {
                 let b = gameData.bullets[i];
-                if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + PLAYER_SIZE &&
-                    b.y > gameData.enemy.y && b.y < gameData.enemy.y + PLAYER_SIZE) {
-                    gameData.enemy.health -= b.damage;
+                if (b.x > gameData.enemy.x && b.x < gameData.enemy.x + 50 &&
+                    b.y > gameData.enemy.y && b.y < gameData.enemy.y + 50) {
+                    gameData.enemy.health -= 20;
                     gameData.bullets.splice(i, 1);
-                    console.log(`Попадание по врагу: bullet x=${b.x}, y=${b.y}, damage=${b.damage}, enemy health=${gameData.enemy.health}`);
+                    console.log(`Попадание по врагу: bullet x=${b.x}, y=${b.y}, enemy x=${gameData.enemy.x}, y=${gameData.enemy.y}, health=${gameData.enemy.health}`);
                     if (conn && conn.open) {
                         conn.send({ type: 'hit', target: 'client', health: gameData.enemy.health });
                     }
                 }
             }
 
+            // Проверяем попадания пуль врага (клиента) по игроку (хосту)
             for (let i = gameData.enemyBullets.length - 1; i >= 0; i--) {
                 let b = gameData.enemyBullets[i];
-                if (b.x > gameData.player.x && b.x < gameData.player.x + PLAYER_SIZE &&
-                    b.y > gameData.player.y && b.y < gameData.player.y + PLAYER_SIZE) {
-                    gameData.player.health -= b.damage;
+                if (b.x > gameData.player.x && b.x < gameData.player.x + 50 &&
+                    b.y > gameData.player.y && b.y < gameData.player.y + 50) {
+                    gameData.player.health -= 20;
                     gameData.enemyBullets.splice(i, 1);
-                    console.log(`Попадание по игроку: bullet x=${b.x}, y=${b.y}, damage=${b.damage}, player health=${gameData.player.health}`);
+                    console.log(`Попадание по игроку: bullet x=${b.x}, y=${b.y}, player x=${gameData.player.x}, y=${gameData.player.y}, health=${gameData.player.health}`);
                     if (conn && conn.open) {
                         conn.send({ type: 'hit', target: 'host', health: gameData.player.health });
                     }
@@ -1037,6 +791,7 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
             ctx.save();
             ctx.translate(-cameraX, -cameraY);
 
@@ -1054,42 +809,23 @@
                 playerColor = `rgba(0, 0, 255, ${alpha})`;
             }
             ctx.fillStyle = playerColor;
-            ctx.fillRect(gameData.player.x, gameData.player.y, PLAYER_SIZE, PLAYER_SIZE);
+            ctx.fillRect(gameData.player.x, gameData.player.y, 50, 50);
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 5;
             ctx.beginPath();
-            ctx.moveTo(gameData.player.x + PLAYER_SIZE / 2, gameData.player.y + PLAYER_SIZE / 2);
-            let gunEndX = gameData.player.x + PLAYER_SIZE / 2 + Math.cos(gameData.player.angle) * WEAPONS[currentWeapon].gunLength;
-            let gunEndY = gameData.player.y + PLAYER_SIZE / 2 + Math.sin(gameData.player.angle) * WEAPONS[currentWeapon].gunLength;
+            ctx.moveTo(gameData.player.x + 25, gameData.player.y + 25);
+            let gunEndX = gameData.player.x + 25 + Math.cos(gameData.player.angle) * 30;
+            let gunEndY = gameData.player.y + 25 + Math.sin(gameData.player.angle) * 30;
             ctx.lineTo(gunEndX, gunEndY);
-            if (currentWeapon === 'rifle') {
-                ctx.moveTo(gunEndX, gunEndY);
-                ctx.lineTo(gunEndX + Math.cos(gameData.player.angle + Math.PI / 4) * 5, gunEndY + Math.sin(gameData.player.angle + Math.PI / 4) * 5);
-                ctx.moveTo(gunEndX, gunEndY);
-                ctx.lineTo(gunEndX + Math.cos(gameData.player.angle - Math.PI / 4) * 5, gunEndY + Math.sin(gameData.player.angle - Math.PI / 4) * 5);
-            }
             ctx.stroke();
 
-            let enemyColor = '#f00';
-            if (gameData.enemy.health < 30) {
-                let alpha = (Math.sin(Date.now() / 200) + 1) / 2;
-                enemyColor = `rgba(255, 0, 0, ${alpha})`;
-            }
-            ctx.fillStyle = enemyColor;
-            ctx.fillRect(gameData.enemy.x, gameData.enemy.y, PLAYER_SIZE, PLAYER_SIZE);
-            ctx.strokeStyle = '#000';
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(gameData.enemy.x, gameData.enemy.y, 50, 50);
             ctx.beginPath();
-            ctx.moveTo(gameData.enemy.x + PLAYER_SIZE / 2, gameData.enemy.y + PLAYER_SIZE / 2);
-            let enemyGunLength = WEAPONS[gameData.enemy.weapon].gunLength;
-            let enemyGunEndX = gameData.enemy.x + PLAYER_SIZE / 2 + Math.cos(gameData.enemy.angle) * enemyGunLength;
-            let enemyGunEndY = gameData.enemy.y + PLAYER_SIZE / 2 + Math.sin(gameData.enemy.angle) * enemyGunLength;
+            ctx.moveTo(gameData.enemy.x + 25, gameData.enemy.y + 25);
+            let enemyGunEndX = gameData.enemy.x + 25 + Math.cos(gameData.enemy.angle) * 30;
+            let enemyGunEndY = gameData.enemy.y + 25 + Math.sin(gameData.enemy.angle) * 30;
             ctx.lineTo(enemyGunEndX, enemyGunEndY);
-            if (gameData.enemy.weapon === 'rifle') {
-                ctx.moveTo(enemyGunEndX, enemyGunEndY);
-                ctx.lineTo(enemyGunEndX + Math.cos(gameData.enemy.angle + Math.PI / 4) * 5, enemyGunEndY + Math.sin(gameData.enemy.angle + Math.PI / 4) * 5);
-                ctx.moveTo(enemyGunEndX, enemyGunEndY);
-                ctx.lineTo(enemyGunEndX + Math.cos(gameData.enemy.angle - Math.PI / 4) * 5, enemyGunEndY + Math.sin(gameData.enemy.angle - Math.PI / 4) * 5);
-            }
             ctx.stroke();
 
             ctx.fillStyle = '#fff';
@@ -1101,6 +837,9 @@
             }
 
             ctx.restore();
+
+            document.getElementById('playerHealth').style.width = `${gameData.player.health}%`;
+            document.getElementById('enemyHealth').style.width = `${gameData.enemy.health}%`;
         }
 
         function drawMiniMap() {
@@ -1114,10 +853,10 @@
             }
 
             miniMapCtx.fillStyle = '#00f';
-            miniMapCtx.fillRect(gameData.player.x * scaleX, gameData.player.y * scaleY, PLAYER_SIZE * scaleX, PLAYER_SIZE * scaleY);
+            miniMapCtx.fillRect(gameData.player.x * scaleX, gameData.player.y * scaleY, 50 * scaleX, 50 * scaleY);
 
             miniMapCtx.fillStyle = '#f00';
-            miniMapCtx.fillRect(gameData.enemy.x * scaleX, gameData.enemy.y * scaleY, PLAYER_SIZE * scaleX, PLAYER_SIZE * scaleY);
+            miniMapCtx.fillRect(gameData.enemy.x * scaleX, gameData.enemy.y * scaleY, 50 * scaleX, 50 * scaleY);
         }
 
         function gameOver(message) {
